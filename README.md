@@ -1,4 +1,4 @@
-# zynq_flash
+# ZYNQ-FLASH
 QSPI flash support for Xilinx's Zynq devices
 
 ## Motivation
@@ -7,7 +7,7 @@ This repo contains a simple flash util, to read, write, erase the QSPI flash att
 
 ## How it work?
 You can build a *flash_writer.elf* executable from the given sources, which will handle the QSPI
-flash. This program runs the Zynq's ARM to give an interface for the XSCT/XSDB TCL console to access
+flash. This program runs on the Zynq's ARM to give an interface for the XSCT/XSDB TCL console to access
 the QSPI flash. The *flash_writer.tcl* downloads this executable, and communicates with it to give
 handy interface for the user.
 
@@ -40,6 +40,8 @@ The flash writer executable have to be re-built for different architectures. Her
   3. Copy the three sources: `main.c`, `flahs.c` `flash.h` into your application project's sources.
   4. Refresh or rebuild your project and check the output in the Debug directory.
 
+## Hardware requirements
+This flash writer does *not* uses DDR-RAM or the Boot-mode switch. So the only requirement is the QSPI flash, which can be enabled for the Zynq in the Vivado's *IP Integrator* (aka. blockdesign) -> Zynq Processing system -> MIO Configuration -> Memory interfaces.
 
 [1]: http://zedboard.org/product/zedboard
 [2]: https://forums.xilinx.com/t5/Vivado-Debug-and-Power/Standalone-XSCT-console/m-p/907961/thread-id/12946#M12947
