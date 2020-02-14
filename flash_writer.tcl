@@ -132,7 +132,7 @@ proc _c_do { func_id {parameters {} } } {
     # Check if init has been run earlier.
     #
     if { $::tcl_function_call_variable < 0 } {
-        puts "ERROR: Global variables has not been initialized. Please run the init_flash_writer function."
+        error "ERROR: Global variables has not been initialized. Please run the init_flash_writer function."
         return -1
     }
 
@@ -211,7 +211,7 @@ proc print_flash_writer_version { } {
 proc flash_init { } {
     set ret [_c_do $::TCL_FUNCTION_ID_FLASH_INIT]
     if { $ret != 0 } {
-        puts "ERROR flash initializationhas failed."
+        error "ERROR flash initializationhas failed."
     }
     
     return
@@ -271,7 +271,7 @@ proc flash_erase { address length } {
 ####################################################################################################
 #
 # _flash_write_slice_ptr writes a slice of data to flash. Do not use this function directly. Use
-# flash_write_file instead.
+# flash_write_slice instead.
 #
 # @param    address is the start address in the flash device in bytes.
 # @param    length is the length of the block to be write in bytes.
@@ -292,12 +292,14 @@ proc _flash_write_slice_ptr { address length ptr } {
 
 ####################################################################################################
 #
-# _flash_write_slice_ptr writes a slice of data to flash. Do not use this function directly. Use
-# flash_write_file instead.
+# flash_write_slice writes a slice of data to flash. This function gets a slice of data as
+# parameter, then copies it to ARM's memory space, then ask to write it to flash.
 #
 # @param    address is the start address in the flash device in bytes.
 # @param    length is the length of the block to be write in bytes.
-# @param    ptr is the address of the block in the executable memory-space. Usually equals the
+# @param    data_slice is the data to be written. Format: it must be a TCL list of bytes.
+#           Ex.: {0x01 0x02 0x03 ...}
+# @param    ptr is the address of the block in the executable memory-space. Default is the
 #           bin_slice_buffer
 #
 # @return   None.
@@ -326,7 +328,8 @@ proc flash_write_slice { address length data_slice {ptr "default" } } {
 
 ####################################################################################################
 #
-# flash_dump_zynq prints a slice of data to Zynq's standard out.
+# flash_dump_zynq prints a slice of data to Zynq's standard out. I suggest to use flash_dump
+# instead.
 #
 # @param    address is the start address in the flash device in bytes to dump.
 # @param    length is the length of the block to dump in bytes.
@@ -355,21 +358,83 @@ proc flash_dump_zynq { address length } {
 # @note     None.
 #
 ####################################################################################################
-proc flash_dump { address length } {
-     set read_data_prt [_c_do $::TCL_FUNCTION_ID_FLASH_READ "$address $length"]
-     set read_data [mrd -value $read_data_prt $length]
+proc flash_dump { address length { channel stdout } { formatum hexdump } } {
+    set read_data_prt [_c_do $::TCL_FUNCTION_ID_FLASH_READ "$address $length"]
     
-    # Put the hex and Latin-1 data to the channel
-    set hex ""
     set len_32 [expr $length/4]
-    for {set i 0} {$i<$len_32} {incr i} {
-        set hex [format "%s %08x" $hex [lindex $read_data $i]]
-        if {$i % 4 == 3 } {
-            puts [ format {%08x %-24s} $address $hex ] 
-            set address [expr $address + 16]
-            set hex ""
+    set read_data [mrd -value $read_data_prt $len_32]
+     
+    if { $formatum == "binary" } {
+        set outBinData [binary format i* $read_data]
+        puts -nonewline $channel $outBinData
+        flush $channel
+    } elseif { $formatum == "hexdump" } {
+        # Put the hex and Latin-1 data to the channel
+        set hex ""
+        for {set i 0} {$i<$len_32} {incr i} {
+            set hex [format "%s %08x" $hex [lindex $read_data $i]]
+            if {$i % 4 == 3 } {
+                puts $channel [ format {%08x %-24s} $address $hex ] 
+                set address [expr $address + 16]
+                set hex ""
+            }
         }
+    } else {
+        puts "Unknown formatum: $formatum"
     }
+    
+    return
+}
+
+
+####################################################################################################
+#
+# flash_dump_file same as flash_dump just it dumps to a file. flash_dump_file opens the file call
+# `flash_dump` to dump to that file, then closes the file.
+#
+# @param    address is the start address in the flash device in bytes to dump.
+# @param    length is the length of the block to dump in bytes.
+#
+# @return   None.
+#
+# @note     None.
+#
+####################################################################################################
+proc flash_dump_file { address length filename { formatum hexdump } } {
+
+    # Open the file:
+    set open_options "wb"
+    set fp [open $filename $open_options]
+    # Dump the flash content
+    flash_dump 0 $length $fp $formatum
+    
+    # Close the file.
+    close $fp
+    
+    return
+}
+
+
+####################################################################################################
+#
+# flash_verify Read back the flash content to a temporary file, then compares that with a reference
+# file.
+#
+# @param    boot_bin_file is the reference file.
+# @param    tmpfilename is the temporary file. Default is: ".readback_image.bin"
+#
+# @return   None.
+#
+# @note     None.
+#
+####################################################################################################
+proc flash_verify { {boot_bin_file "default"} {tmpfilename ".readback_image.bin"} } {
+    
+    set image_size [file size $boot_bin_file]
+    
+    flash_dump_file 0 $image_size $tmpfilename "binary"
+    
+    file_equals $tmpfilename $boot_bin_file
     
     return
 }
@@ -435,14 +500,24 @@ proc flash_write_file { {boot_bin_file "default"} {verbose 1} } {
 }
 
 
+####################################################################################################
+#
+# file_to_hex reads a binary file into a TCL list.
+#
+# @param    filename the name of the file to be read.
+#
+# @return   None.
+#
+# @note     None.
+#
+####################################################################################################
 proc file_to_hex { filename  } {
 
     # Open the file, and set up to process it in binary mode.
     set fid [open $filename r]
     fconfigure $fid -translation binary -encoding binary
 
-    # Record the seek address. Read 16 bytes from the file.
-    set addr [ tell $fid ]
+    # Read the complete file.
     set s    [read $fid ]
   
     # Convert the data to hex
@@ -452,12 +527,20 @@ proc file_to_hex { filename  } {
     regsub -all -- {..} $hex {0x& } hex
     
     return $hex
-    
-    return
 }
 
 
-
+####################################################################################################
+#
+# hexdump Unix's hexdump TCL implementation.
+#
+# @param    filename the name of the file to be read.
+#
+# @return   None.
+#
+# @note     None.
+#
+####################################################################################################
 proc hexdump { filename { channel stdout } } {
      # This is derived from the Tcler's WIKI, page 1599,
      # original author unknown, possibly Kevin Kenny.
@@ -499,6 +582,30 @@ proc hexdump { filename { channel stdout } } {
      
      return
 }
+
+#
+# From: https://stackoverflow.com/a/29289660/2506522
+#
+proc file_equals {file1 file2} {
+    set f1 [open $file1 "rb"]
+    set f2 [open $file2 "rb"]
+    try {
+        while 1 {
+            if {[read $f1 4096] ne [read $f2 4096]} {
+                return 0
+            } elseif {[eof $f1]} {
+                # The same if we got to EOF at the same time
+                return [eof $f2]
+            } elseif {[eof $f2]} {
+                return 0
+            }
+        }
+    } finally {
+        close $f1
+        close $f2
+    }
+}
+
 
 #
 # Check existance of ps7_init procedure
