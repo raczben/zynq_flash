@@ -249,7 +249,12 @@ proc hello { hello_param } {
 ####################################################################################################
 proc print_flash_writer_version { } {
     set version [_c_do $::TCL_FUNCTION_ID_GET_VERSION]
-    puts $version
+    
+    set major [expr ($version >> 16) & 0xff]
+    set minor [expr ($version >> 8)  & 0xff]
+    set fix   [expr ($version)       & 0xff]
+    
+    puts [format "Zynq-Flash v%d.%d.%d" $major $minor $fix]
     
     return
 }
