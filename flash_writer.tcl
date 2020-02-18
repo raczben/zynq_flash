@@ -51,16 +51,19 @@ set bin_slice_buffer_size -1
 
 ####################################################################################################
 #
-# flash_bin_file do a full flashing cycle. It initializes the Zynq, erase and write flash.
+# flash_image do a full flashing cycle. It initializes the Zynq, erase and write flash.
 #
 # @param    boot_bin_file the name of the file to be written.
+# @param    do_erase Erase flash before writing the image. (Recommended)
+# @param    do_blank_check Check the success of the erase.
+# @param    do_verify Check the write of the image.
 #
 # @return   0 on success else 1
 #
 # @note     None.
 #
 ####################################################################################################
-proc flash_bin_file { bin_file { do_erase 1 } { do_blank_check 0 } { do_verify 0 } } {
+proc flash_image { bin_file { do_erase 1 } { do_blank_check 0 } { do_verify 1 } } {
 
 	if { ! [file exists $bin_file] } {
 		puts "ERROR, $bin_file file does not exist"

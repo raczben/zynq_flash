@@ -18,14 +18,9 @@ You can try the prebuilt executables on [ZEDBoard][1] (or any board with 7Z020 d
   2. Go to this repo's folder. `cd zynq_flash`
   3. Source tcl sources: `source zed_bin/ps7_init.tcl` and `source flash_writer.tcl`
   4. Connect and choose your ARM target: `connect` and `targets <num>`
-  5. Run initialization procedure: `init_flash_writer zed_bin/flash_writer.elf`
-  6. Run flash initialization: `flash_init`
-  7. Check with `get_flash_info` (optional)
-  8. Erase flash `flash_erase 0 0x500000` (This takes couple of secs)
-  9. Write the boot image `flash_write_file zed_bin/BOOT.bin` (Choose your own image, this example
-    boot-image will turn on all LEDs and turn of them based on the buttons.) (This takes a half minute)
-  10. Check with `flash_dump 0 64` and check the `aa995566` sync word at 0x20
-  11. Turn off/on the board and check the LEDs. If you have any problem feel free to contact me.
+  5. Run all flashing operation (init, erase, write, verify) with one command:
+  `flash_image zed_bin/boot.bin` (you can turn on/off erase, blank-check and verify)
+  6. Turn off/on the board and check the LEDs. If you have any problem feel free to contact me.
 
 [zed_bin_full_console.txt][3] is a full log of a flash programming.
 
