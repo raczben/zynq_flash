@@ -14,6 +14,7 @@ variable TCL_FUNCTION_ID_INIT                   0x1
 variable TCL_FUNCTION_ID_PRINT_HELLO            0x10
 variable TCL_FUNCTION_ID_GET_VERSION            0x20
 variable TCL_FUNCTION_ID_FLASH_ERASE            0x100
+variable TCL_FUNCTION_ID_FLASH_ERASE_ALL        0x102
 variable TCL_FUNCTION_ID_GET_FLASH_INFO         0x101
 variable TCL_FUNCTION_ID_FLASH_INIT             0x105
 variable TCL_FUNCTION_ID_FLASH_WRITE            0x110
@@ -46,6 +47,61 @@ set tcl_function_call_variable -1
 set tcl_parameter_variable -1
 set bin_slice_buffer -1
 set bin_slice_buffer_size -1
+
+
+####################################################################################################
+#
+# flash_bin_file do a full flashing cycle. It initializes the Zynq, erase and write flash.
+#
+# @param    boot_bin_file the name of the file to be written.
+#
+# @return   0 on success else 1
+#
+# @note     None.
+#
+####################################################################################################
+proc flash_bin_file { bin_file { do_erase 1 } { do_blank_check 0 } { do_verify 0 } } {
+
+	if { ! [file exists $bin_file] } {
+		puts "ERROR, $bin_file file does not exist"
+		return 1
+	}
+	
+	puts "Loading flash writer elf..."
+	init_flash_writer
+	
+	puts "Initializing flash..."
+	if { [flash_init] } {
+        puts "ERROR: flash_init has failed."
+        return 1
+    }
+	
+    if { $do_erase } {
+        set image_size [file size $bin_file]
+        puts "Erasing flash..."
+        flash_erase 0 $image_size
+    }
+    
+    if { $do_blank_check } {
+        puts "ERROR: do_blank_check has not been implemented."
+    }
+	
+	puts "Writing flash..."
+	if { [flash_write_file $bin_file] } {
+        puts "ERROR: flash_write_file has failed."
+        return 1
+    }
+    
+    if { $do_verify } {
+        if { [flash_verify $bin_file] } {
+            puts "ERROR: flash_verify has failed. Note, that this feature has not been tested."
+        }
+    }
+	
+	puts "Done!"
+    
+    return 0
+}
 
 
 ####################################################################################################
@@ -212,9 +268,10 @@ proc flash_init { } {
     set ret [_c_do $::TCL_FUNCTION_ID_FLASH_INIT]
     if { $ret != 0 } {
         error "ERROR flash initializationhas failed."
+        return 1
     }
     
-    return
+    return 0
 }
 
 
@@ -256,15 +313,34 @@ proc get_flash_info { } {
 # @param    address is the start address of the block to be erase in bytes.
 # @param    length is the length of the block to be erase in bytes.
 #
-# @return   None.
+# @return   Return zero on success.
 #
 # @note     None.
 #
 ####################################################################################################
 proc flash_erase { address length } {
-    _c_do $::TCL_FUNCTION_ID_FLASH_ERASE "$address $length"
+    set ret [_c_do $::TCL_FUNCTION_ID_FLASH_ERASE "$address $length"]
     
-    return
+    return $ret
+}
+
+
+####################################################################################################
+#
+# flash_erase_all Erase all sector of the flash. Must be called before writing the flash. (It is
+# faster than the flash_erase for longer sizes)
+#
+# @param    None.
+#
+# @return   Return zero on success.
+#
+# @note     None.
+#
+####################################################################################################
+proc flash_erase_all { } {
+    set ret [_c_do $::TCL_FUNCTION_ID_FLASH_ERASE_ALL]
+    
+    return $ret
 }
 
 
@@ -348,22 +424,64 @@ proc flash_dump_zynq { address length } {
 
 ####################################################################################################
 #
-# flash_dump prints a slice of data to TCL console in a hexdump-like format.
+# flash_read Reads arbitrary size of data from the flash
 #
 # @param    address is the start address in the flash device in bytes to dump.
 # @param    length is the length of the block to dump in bytes.
 #
-# @return   None.
+# @return   Zero on success.
 #
 # @note     None.
 #
 ####################################################################################################
-proc flash_dump { address length { channel stdout } { formatum hexdump } } {
-    set read_data_prt [_c_do $::TCL_FUNCTION_ID_FLASH_READ "$address $length"]
+proc flash_read { address length {verbose 1} } {
+    set read_data ""
+
+    for {set start_addr 0} {$start_addr<$length} {incr start_addr $::bin_slice_buffer_size} {
+        if { $verbose } {
+            puts [format "Read: 0x%04x / 0x%x kB   %d%%" \
+                [expr $start_addr / 1024] [expr $length / 1024] [expr 100 * $start_addr / $length]]
+        }
+        
+        set chunk_len [expr min($length - $start_addr, $::bin_slice_buffer_size)]
+        set read_data_prt [_c_do $::TCL_FUNCTION_ID_FLASH_READ "$start_addr $chunk_len"]
+        
+        if { $read_data_prt == 0} {
+            puts "ERROR: flash_dump: got null pointer. Please run flash_init first."
+            return 1
+        }
+        
+        set len_32 [expr $chunk_len/4]
+        set read_data [concat $read_data [mrd -value $read_data_prt $len_32]]
+    }
+    
+    return $read_data
+}
+
+
+####################################################################################################
+#
+# flash_dump prints a slice of data to TCL console in a hexdump-like format.
+#
+# @param    address is the start address in the flash device in bytes to dump.
+# @param    length is the length of the block to dump in bytes.
+# @param    channel Channel to write the results. File or output stream. Default is stdout 
+# @param    formatum [hexdump | binary] default is hexdump
+#
+# @return   Zero on success.
+#
+# @note     None.
+#
+####################################################################################################
+proc flash_dump { address length { channel stdout } { formatum hexdump } {verbose 1} } {
+    set read_data [flash_read $address $length $verbose]
+    if {$read_data == 1} {
+        puts "read_data returned error."
+        return 1
+    }
     
     set len_32 [expr $length/4]
-    set read_data [mrd -value $read_data_prt $len_32]
-     
+    
     if { $formatum == "binary" } {
         set outBinData [binary format i* $read_data]
         puts -nonewline $channel $outBinData
@@ -381,9 +499,10 @@ proc flash_dump { address length { channel stdout } { formatum hexdump } } {
         }
     } else {
         puts "Unknown formatum: $formatum"
+        return 1
     }
     
-    return
+    return 0
 }
 
 
@@ -423,20 +542,41 @@ proc flash_dump_file { address length filename { formatum hexdump } } {
 # @param    boot_bin_file is the reference file.
 # @param    tmpfilename is the temporary file. Default is: ".readback_image.bin"
 #
-# @return   None.
+# @return   Non-zero on error.
 #
 # @note     None.
 #
 ####################################################################################################
 proc flash_verify { {boot_bin_file "default"} {tmpfilename ".readback_image.bin"} } {
+    #
+    # Getting/saving the boot_bin_file
+    #
+    if { $boot_bin_file == "default" } {
+        set boot_bin_file $::boot_bin_file
+    }
+    if { $boot_bin_file == "undefined" } {
+        puts "ERROR: Boot image file must be given at the first time."
+        return 1
+    }
+    if { ! [file exists $boot_bin_file ] } {
+        puts "ERROR: Boot image file $boot_bin_file does not exists."
+        return 1
+    }
+    
+    set ::boot_bin_file  [file normalize $boot_bin_file]
     
     set image_size [file size $boot_bin_file]
     
+    puts "Reading back flash content..."
     flash_dump_file 0 $image_size $tmpfilename "binary"
     
-    file_equals $tmpfilename $boot_bin_file
+    if { ! [file_equals $tmpfilename $boot_bin_file] } {
+        puts "ERROR! Verification failed. Readback file mismatches the reference file."
+        return 1
+    }
+    puts "Verification success."
     
-    return
+    return 0
 }
 
 
@@ -446,7 +586,7 @@ proc flash_verify { {boot_bin_file "default"} {tmpfilename ".readback_image.bin"
 #
 # @param    boot_bin_file the name of the file to be written.
 #
-# @return   None.
+# @return   Non-zero on success.
 #
 # @note     Erase befor write.
 #
@@ -461,11 +601,11 @@ proc flash_write_file { {boot_bin_file "default"} {verbose 1} } {
     }
     if { $boot_bin_file == "undefined" } {
         puts "ERROR: Boot image file must be given at the first time."
-        return
+        return 1
     }
     if { ! [file exists $boot_bin_file ] } {
         puts "ERROR: Boot image file $boot_bin_file does not exists."
-        return
+        return 1
     }
     set ::boot_bin_file  [file normalize $boot_bin_file]
     
@@ -486,9 +626,9 @@ proc flash_write_file { {boot_bin_file "default"} {verbose 1} } {
     # Write boot image slice by slice
     #
     for {set i 0} {$i<$image_size} {incr i $::bin_slice_buffer_size} {
-    
         if { $verbose } {
-            puts [format "0x%04x / 0x%x kB   %%%d" [expr $i / 1024] [expr $image_size / 1024] [expr 100 * $i / $image_size]]
+            puts [format "0x%04x / 0x%x kB   %d%%" \
+                [expr $i / 1024] [expr $image_size / 1024] [expr 100 * $i / $image_size]]
         }
     
         set hex_slice [lrange $hex_data $i [expr $i+$::bin_slice_buffer_size-1]]
@@ -496,7 +636,7 @@ proc flash_write_file { {boot_bin_file "default"} {verbose 1} } {
         flash_write_slice $i $::bin_slice_buffer_size $hex_slice
     }
     
-    return
+    return 0
 }
 
 
@@ -587,23 +727,16 @@ proc hexdump { filename { channel stdout } } {
 # From: https://stackoverflow.com/a/29289660/2506522
 #
 proc file_equals {file1 file2} {
-    set f1 [open $file1 "rb"]
-    set f2 [open $file2 "rb"]
-    try {
-        while 1 {
-            if {[read $f1 4096] ne [read $f2 4096]} {
-                return 0
-            } elseif {[eof $f1]} {
-                # The same if we got to EOF at the same time
-                return [eof $f2]
-            } elseif {[eof $f2]} {
-                return 0
-            }
-        }
-    } finally {
-        close $f1
-        close $f2
+    # optimization: check file size first
+    set equal 0
+    if {[file size $file1] == [file size $file2]} {
+        set fh1 [open $file1 r]
+        set fh2 [open $file2 r]
+        set equal [string equal [read $fh1] [read $fh2]]
+        close $fh1
+        close $fh2
     }
+    return $equal
 }
 
 

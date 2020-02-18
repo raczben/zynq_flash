@@ -1,6 +1,5 @@
 /***************************** Include Files *********************************/
 
-#include "xparameters.h"	/* SDK generated parameters */
 #include "xqspips.h"		/* QSPI device driver */
 #include "xil_io.h"
 #include "flash.h"
@@ -109,7 +108,19 @@ FlashInfo* GetFlashInfo(){
 	return &(Flash_Config_Table[FCTIndex]);
 }
 
-void QspiFlashDump(XQspiPs *QspiInstancePtr, u32 start_addr, u32 len){
+u8* get_slice_buffer(){
+	return ReadBuffer;
+}
+
+u32 get_slice_buffer_size(){
+	return (PAGE_COUNT * MAX_PAGE_SIZE);
+}
+
+int QspiFlashDump(XQspiPs *QspiInstancePtr, u32 start_addr, u32 len){
+	if (!QspiInstancePtr->IsReady){
+		// If the device has not been configured return error:
+		return XST_FAILURE;
+	}
 
 	start_addr = start_addr & 0xfffffff0;
 	len = len & 0x000007f0;
@@ -119,12 +130,17 @@ void QspiFlashDump(XQspiPs *QspiInstancePtr, u32 start_addr, u32 len){
 	 */
 	ReadBuffer = FlashRead2(QspiInstancePtr, start_addr, len);
 	MemDump(ReadBuffer, start_addr, len);
+	return XST_SUCCESS;
 }
 
 u8* FlashRead2(XQspiPs *QspiInstancePtr, u32 start_addr, u32 len){
+	if (!QspiInstancePtr->IsReady){
+		// If the device has not been configured return error:
+		return 0;
+	}
 
 	xil_printf("ReadBuffer: 0x%x\r\n", ReadBuffer);
-	FlashRead(QspiInstancePtr, start_addr, MaxData, QUAD_READ_CMD,
+	FlashRead(QspiInstancePtr, start_addr, len, QUAD_READ_CMD,
 			ReadBuffer, ReadBuffer);
 	return ReadBuffer;
 }
@@ -367,9 +383,28 @@ void FlashWrite(XQspiPs *QspiPtr, u32 Address, u32 ByteCount, u8 Command,
 
 }
 
-void FlashErase2(XQspiPs *QspiPtr, u32 Address, u32 ByteCount)
+int FlashEraseAll(XQspiPs *QspiPtr)
 {
+	if (!QspiPtr->IsReady){
+		// If the device has not been configured return error:
+		return XST_FAILURE;
+	}
+
+	u32 ByteCount = (Flash_Config_Table[FCTIndex]).NumSect *
+				(Flash_Config_Table[FCTIndex]).SectSize;
+	FlashErase(QspiPtr, 0, ByteCount, ReadBuffer);
+	return XST_SUCCESS;
+}
+
+
+int FlashErase2(XQspiPs *QspiPtr, u32 Address, u32 ByteCount)
+{
+	if (!QspiPtr->IsReady){
+		// If the device has not been configured return error:
+		return XST_FAILURE;
+	}
 	FlashErase(QspiPtr, Address, ByteCount, ReadBuffer);
+	return XST_SUCCESS;
 }
 
 /*****************************************************************************/

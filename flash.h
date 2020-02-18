@@ -3,7 +3,6 @@
 
 /***************************** Include Files *********************************/
 
-#include "xparameters.h"	/* SDK generated parameters */
 #include "xqspips.h"		/* QSPI device driver */
 #include "xil_io.h"
 
@@ -238,6 +237,10 @@ typedef struct{
 
 /************************** Function Prototypes ******************************/
 
+u8* get_slice_buffer();
+
+u32 get_slice_buffer_size();
+
 int QspiG128FlashExample(XQspiPs *QspiInstancePtr, u16 QspiDeviceId);
 
 void FlashErase(XQspiPs *QspiPtr, u32 Address, u32 ByteCount, u8 *WriteBfrPtr);
@@ -258,7 +261,7 @@ void DieErase(XQspiPs *QspiPtr, u8 *WriteBfrPtr);
 
 u32 GetRealAddr(XQspiPs *QspiPtr, u32 Address);
 
-void QspiFlashDump(XQspiPs *QspiInstancePtr, u32 start_addr, u32 len);
+int QspiFlashDump(XQspiPs *QspiInstancePtr, u32 start_addr, u32 len);
 
 u8* FlashRead2(XQspiPs *QspiInstancePtr, u32 start_addr, u32 len);
 
@@ -266,7 +269,9 @@ int FlashInit(XQspiPs *QspiInstancePtr, u16 QspiDeviceId);
 
 void MemDump(void* ptr, u32 start_addr, u32 len);
 
-void FlashErase2(XQspiPs *QspiPtr, u32 Address, u32 ByteCount);
+int FlashErase2(XQspiPs *QspiPtr, u32 Address, u32 ByteCount);
+
+int FlashEraseAll(XQspiPs *QspiPtr);
 
 void FlashWrite2(XQspiPs *QspiPtr, u32 Address, u32 ByteCount, u8 *WriteBfrPtr);
 
@@ -277,7 +282,7 @@ FlashInfo* GetFlashInfo();
 #define INFO 20
 #define WARNING 30
 #define ERROR 40
-#define VERBOSITY 20
+#define VERBOSITY 30
 
 #define verb_printf(type,...) \
 		if (((type) >= VERBOSITY))  {xil_printf (__VA_ARGS__); }
