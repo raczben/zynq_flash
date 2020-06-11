@@ -2,14 +2,15 @@
 QSPI flash support for Xilinx's Zynq devices
 
 ## Motivation
-There are many problem around flash programming of the Zynq FPGAs. The task become harder if there is no DDR memory or the bootmode switch is unavailable, etc...
+There are many problems around the flash programming of the Zynq FPGAs. The task becomes harder if there is no DDR memory, or the bootmode switch is unavailable, etc...
 This repo contains a simple flash util, to read, write, erase the QSPI flash attached to Zynq FPGAs.
 
-## How it work?
-You can build a *flash_writer.elf* executable from the given sources, which will handle the QSPI
-flash. This program runs on the Zynq's ARM to give an interface for the XSCT/XSDB TCL console to access
-the QSPI flash. The *flash_writer.tcl* downloads this executable, and communicates with it to give
-handy interface for the user.
+## How it works?
+An executable (*flash_writer.elf*) runs on the Zynq's ARM, which handles the QSPI interface itself, and
+gives an interface for the XSCT/XSDB TCL console. In the TCL console the *flash_writer.tcl* gives TCL procedures.
+These procedures communicate with the *flash_writer.elf* and command it to read, write, erase the QSPI flash.
+
+You can use prebuilt *flash_writer.elf* executable or you can build it from scratch from the given sources.
 
 ## Try prebuilt on ZED board
 You can try the prebuilt executables on [ZEDBoard][1] (or any board with 7Z020 device.)
@@ -25,12 +26,12 @@ You can try the prebuilt executables on [ZEDBoard][1] (or any board with 7Z020 d
 [zed_bin_full_console.txt][3] is a full log of a flash programming.
 
 ## Build flash_writer.elf from source
-The flash writer executable have to be re-built for different architectures. Here is a small
- description how to do that:
+The flash writer executable has to be rebuilt for different architectures. Here is a small
+ description of how to do that:
 
   1. Open Xilinx's XSDK.
   2. Create a new Application project. Use your own hardware-platform / board-support-package.
-  Choose empty application. The [zed_bin/system.hdf][4] hardware definition for ZedBoard, so you can
+  Choose the empty application. The [zed_bin/system.hdf][4] hardware definition for ZedBoard, so you can
    use that hdf for ZedBoard flashing.
   3. Copy the three sources: `main.c`, `flahs.c` `flash.h` into your application project's sources.
   4. Refresh or rebuild your project and check the output in the Debug directory.
