@@ -159,6 +159,9 @@ proc init_flash_writer { {flash_writer_elf default} } {
     #
     # Setting global variables.
     #
+    # See more at:
+    # https://forums.xilinx.com/t5/Processor-System-Design-and-AXI/Synchronise-Zynq-with-TCL/m-p/1073951 
+    #
     puts "Getting communication variable (tcl_function_call)"
     set global_dict [print -dict &tcl_function_call]
     set ::tcl_function_call_variable [dict get $global_dict &tcl_function_call]

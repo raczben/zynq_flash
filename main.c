@@ -36,6 +36,11 @@
  * in this register too:
  * tcl_function_call[0] = 0 // This means, that the function done.
  * tcl_function_call[1] is the return value.
+ *
+ * The address of this variable will be fetched by the TCL script by the `print` command.
+ * See more at:
+ * https://forums.xilinx.com/t5/Processor-System-Design-and-AXI/Synchronise-Zynq-with-TCL/m-p/1073951
+ *
  */
 u32 volatile tcl_function_call[16] = {TCL_FUNCTION_ID_INIT, 0, 0, 0, 0, 0, 0, 0};
 
